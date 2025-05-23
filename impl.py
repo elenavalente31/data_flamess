@@ -99,12 +99,23 @@ class Handler():
         return True
 
 
-#creiamo l'UploadHandler
+#creiamo l'UploadHandler che fornisce solo la struttura, ma verrà poi implementato tutto in JournalUploadHandler e CategoryUploadHandler
 
 class UploadHandler(Handler):
     def __init__(self):
-        super().__init__
+        super().__init__()
 
-    def PushDataToDb(DbPathOrUrl):
+    def PushDataToDb(self, DbPathOrUrl):
+        raise NotImplementedError("Subclasses must implement this") #non so, proposta di gpt
+
+from rdflib import Graph, URIRef, Literal, RDF
+from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore
+import pandas as pd
+from pandas import read_csv
+
+
+class JournalUploadHandler(UploadHandler):
+    def __init__(self):
+        super().__init__()
         
 
