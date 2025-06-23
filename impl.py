@@ -1,11 +1,8 @@
-#Class implementation
-
-
-# Implementiamo le classi che vediamo nell'UML:
+# Implementation of the classes we see in the UML:
 
 class IdentifiableEntity:
     def __init__(self, identifiers):
-        self.id = set() # ci possono essere più id [1..*]
+        self.id = set() 
         for identifier in identifiers:
             self.id.add(identifier)
 
@@ -17,24 +14,24 @@ class IdentifiableEntity:
         return result
 
 class Journal(IdentifiableEntity):
-    def __init__(self, identifiers, title, languages, seal: bool, licence, apc: bool, publisher=None):
+    def __init__(self, identifiers, title, languages, seal: bool, licence, apc: bool, publisher=None, categories=None, areas=None):
         super().__init__(identifiers) 
         self.title = title
-        self.languages = languages   # perché se metto lista mi divide la stringa in caratteri
+        self.languages = languages   
         self.publisher = publisher
         self.seal = seal
         self.licence = licence
         self.apc = apc
-        self.categories = []  
-        self.areas= []    
+        self.categories = categories or []
+        self.areas= areas or []     
 
 
-    # Metodi
+    # Methods
     def getTitle(self):
         return self.title
 
     def getLanguages(self):
-        return sorted(self.languages)  # Restituisce lista ordinata
+        return sorted(self.languages)  # Returns a sorted list
 
     def getPublisher(self):
         return self.publisher
@@ -46,9 +43,9 @@ class Journal(IdentifiableEntity):
         return self.licence
 
     def hasAPC(self):
-        return self.apc  # IL RISULTATO DEVE ESSERE UN BOOLEAN
+        return self.apc  
     
-    # Metodi per le relazioni
+    # Methods for relationships
     def getCategories(self):
         return self.categories
     
@@ -72,28 +69,24 @@ class Area(IdentifiableEntity):
     def __init__(self, identifiers):
         super().__init__(identifiers)
 
-# (qui potrei anche evitare il super perché tanto oltre a identifiers non c'è niente. In category c'è invece quartile.)
 
 
-# Gestione del caricamento dei dati (JSON -> SQL)
+
+# Data loading management.
+#classes Handler and UploadHandler
 
 class Handler():
     
     def __init__(self):
-
         self.dbPathOrUrl = ""
 
     def getDbPathOrUrl(self):
         return self.dbPathOrUrl
 
-    def setDbPathOrUrl(self, pathOrUrl): # crea l'attributo dbpath
+    def setDbPathOrUrl(self, pathOrUrl): # creates the dbPath attribute
         self.dbPathOrUrl = pathOrUrl
+        return True
 
-
-
-# se non scrivo init sotto uploadhandler viene ereditato dalla classe handler 
-# (non ci serve, ma volendo potrei modificare metodi di handler in uploadhandler)
-# qui non scrivo super
 
 
 class UploadHandler(Handler):
@@ -104,9 +97,6 @@ class UploadHandler(Handler):
     def pushDataToDb(self, path):
         pass
 
-# in python esiste il concetto di classe astratta, cioè una classe che non deve essere inizializzata, ma che fa da modello per altre classi.
-# Questa non è una classe astratta, però siccome sto ereditando questa funzione nelle successive non serve scrivere niente dentro.
-
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -115,7 +105,7 @@ class UploadHandler(Handler):
 
 # MARI
 
-# Dal JSON al db relazionale
+# From JSON to relational DB
 
 import sqlite3
 import json
@@ -134,55 +124,43 @@ class CategoryUploadHandler(UploadHandler):
             return value.replace("'", "''").replace(';', ',') if value else ''
         
         conn = None
-        
-# Inizializzare conn a None prima del blocco try è una pratica di programmazione standard e molto importante per garantire la robustezza e la correttezza del tuo codice, specialmente quando lavori con risorse esterne come le connessioni a un database.
-# I motivi principali sono:
 
-#  1. Gestione degli Errori nelle Prime Fasi:
-#     Se si verifica un errore molto presto nel blocco try (ad esempio, il database path db_path non è valido o c'è un problema di permessi che impedisce a sqlite3.connect(db_path) di stabilire la connessione), la variabile conn potrebbe non essere mai assegnata.
-#     Senza conn = None all'inizio, se la connessione fallisce, conn non esisterà.
-#     Quando il controllo passa al blocco finally, il codice if conn: cercherebbe di accedere a una variabile non definita, causando un NameError. Inizializzandola a None, garantisci che conn esista sempre, anche se l'assegnazione successiva fallisce.
-
-#  2. Chiusura Sicura della Connessione (nel finally):
-#     Il blocco finally è progettato per eseguire codice che deve sempre essere eseguito, indipendentemente dal fatto che si sia verificato un errore nel blocco try o meno. La sua funzione principale qui è chiudere la connessione al database (conn.close()).
-#     Il controllo if conn: all'interno del finally è essenziale. Se la connessione non è stata stabilita con successo (quindi conn è rimasto None), non puoi cercare di chiamare conn.close() su un oggetto None, altrimenti otterresti un AttributeError.
-#     Inizializzando conn = None e usando if conn: nel finally, ti assicuri di tentare di chiudere la connessione solo se è stata effettivamente aperta con successo.
-
-        # Connessione al database
+# Database connection
     
         conn = sqlite3.connect(db_path)
         conn.execute("PRAGMA foreign_keys = ON;")
         cursor = conn.cursor()
         try:
 
-            # Creazione tabelle
-            # -- Tabella principale dei Journal
+            # Table creation
+            # -- Main Journal table
             cursor.execute('''CREATE TABLE IF NOT EXISTS Journal (
             internal_id TEXT PRIMARY KEY);''')
 
-            # -- Identificatori alternativi per un Journal
+            # -- Alternative identifiers for a Journal
             cursor.execute('''CREATE TABLE IF NOT EXISTS JournalIdentifier (
             journal_id TEXT NOT NULL,
             identifier TEXT NOT NULL,
             PRIMARY KEY (journal_id, identifier),
             FOREIGN KEY (journal_id) REFERENCES Journal(internal_id));''')
 
-            # -- Categorie (es. Hematology, Medicine, ecc.)
+            # -- Categories (e.g., Hematology, Medicine, etc.)
             cursor.execute('''CREATE TABLE IF NOT EXISTS Category (
             category_id TEXT PRIMARY KEY,
             category TEXT NOT NULL,
             quartile TEXT NOT NULL,
             UNIQUE(category, quartile)
-            );''') # UNIQUE(category, quartile) significa che non possono esistere due righe diverse 
-            # nella tabella Category che abbiano contemporaneamente gli stessi valori nelle colonne category e quartile.
+            );''') # UNIQUE(category, quartile) means that two different rows 
+            # in the Category table cannot have the same values simultaneously 
+            # in the category and quartile columns.
 
-            # -- Aree (es. Computer Science, Medicine, ecc.)
+            # -- Areas (e.g., Computer Science, Medicine, etc.)
             cursor.execute('''CREATE TABLE IF NOT EXISTS Area (
             area_id TEXT PRIMARY KEY,
             area TEXT NOT NULL
             );''')
 
-            # -- Associazione molti-a-molti: Journal ha una o più Categorie
+            # -- Many-to-many relationship: 
             cursor.execute('''CREATE TABLE IF NOT EXISTS HasCategory (
             journal_id TEXT NOT NULL,
             category_id TEXT NOT NULL,
@@ -191,7 +169,7 @@ class CategoryUploadHandler(UploadHandler):
             FOREIGN KEY (category_id) REFERENCES Category(category_id)
             );''')
 
-            # -- Associazione molti-a-molti: Journal ha una o più Aree
+            # -- Many-to-many relationship: 
             cursor.execute('''CREATE TABLE IF NOT EXISTS HasArea (
             journal_id TEXT NOT NULL,
             area_id TEXT NOT NULL,
@@ -201,17 +179,17 @@ class CategoryUploadHandler(UploadHandler):
             );''')
 
 
-            # CARICAMENTO JSON
+            # JSON LOADING
 
-            # Lettura del file:
+            # File reading:
             
             with open(path, 'r', encoding='utf-8') as f:
                 json_data = json.load(f)
                     
 
-            # --- Recupero dei contatori esistenti --- 
-            # è fondamentale recuperare l'ultimo ID esistente nel database prima di iniziare a generare nuovi ID. 
-            # Questo garantisce che i nuovi ID siano unici e non sovrappongano quelli già presenti.
+            # --- Retrieving existing counters --- 
+            # it is essential to retrieve the last existing ID in the database before starting to generate new IDs. 
+            # This ensures that the new IDs are unique and do not overlap with existing ones.
 
             cursor.execute("SELECT IFNULL(MAX(CAST(SUBSTR(internal_id, INSTR(internal_id, '-') + 1) AS INTEGER)), -1) FROM Journal")
             journal_counter = cursor.fetchone()[0] + 1
@@ -224,138 +202,135 @@ class CategoryUploadHandler(UploadHandler):
             # ----------------------------------------
 
             for journal_entry in json_data:
-            # Verifica se il journal esiste già basandosi su uno dei suoi identificatori unici (es. ISSN/EISSN).
-            # Questo è un miglioramento importante per evitare di duplicare un intero journal
-            # se lo stesso journal appare in più file JSON o in esecuzioni successive.
-            # Si assume che 'identifiers' sia presente nel JSON e che almeno uno sia sufficiente per l'unicità.
-            # Se non ci sono identificatori nel JSON, la logica di fallback si baserà solo sul `journal_counter`,
-            # che è meno robusto per evitare duplicati del journal stesso.
-                journal_identifiers = journal_entry.get('identifiers', []) # Estrae la lista degli identificatori dal JSON
-                existing_journal_id = None # Inizializza la variabile per memorizzare l'ID del journal esistente.
+            # Checks whether the journal already exists based on one of its unique identifiers (e.g., ISSN/EISSN).
+            # This is important to avoid duplicates:
+            # e.g. the same journal appears in multiple JSON files or in subsequent executions.
+            # It is assumed that 'identifiers' is present in the JSON and that at least one is sufficient for uniqueness.
+                journal_identifiers = journal_entry.get('identifiers', []) # Extracts the list of identifiers from the JSON
+                existing_journal_id = None # Initializes the variable to store the ID of the existing journal.
                 
-                # Controlla TUTTI gli identificatori per vedere se il journal esiste già nel database.
-                if journal_identifiers: # Ovviamente ci sono identificatori da controllare perché è obbligatorio avere degli identifiers, ma per sicurezza aggiungo questo if.
-                    for identifier_to_check in journal_identifiers: # Itera su ogni identificatore presente nella lista.
+                # Checks ALL identifiers to see if the journal already exists in the database.
+                if journal_identifiers: # Obviously there are identifiers to check because having identifiers is mandatory, but this if is added for safety.
+                    for identifier_to_check in journal_identifiers: # Iterates over each identifier in the list.
                         cursor.execute('''
                             SELECT Journal.internal_id
                             FROM Journal
                             JOIN JournalIdentifier ON Journal.internal_id = JournalIdentifier.journal_id
                             WHERE JournalIdentifier.identifier = ?
-                        ''', (identifier_to_check,)) # Questa query cerca nei dati un journal che abbia quell'identifier.
-                        result = cursor.fetchone() # Recupera la prima riga del risultato della query. Sarà `None` se non trova corrispondenze, altrimenti una tupla che contiene l'internal_id del journal (es. ('journal-123',)).
-                        if result: # Se la query ha trovato una corrispondenza (cioè `result` non è `None`), cioè viene trovato un Journal con quell'id:
-                            existing_journal_id = result[0] # Assegna ad una variabile l'internal_id del journal trovato.
-                            break # il ciclo sugli identificatori viene interrotto (break). Non è necessario controllare gli altri identificatori per questo journal, in quanto ne abbiamo già trovato uno corrispondente.
+                        ''', (identifier_to_check,)) # This query looks for a journal with that identifier
+                        result = cursor.fetchone() # Retrieves the first row of the query result. It will be `None` if no match is found, otherwise a tuple containing the journal's internal_id (e.g., ('journal-123',)).
+                        if result: # If the query found a match (i.e., `result` is not `None`), a Journal with that id is found:
+                            existing_journal_id = result[0] # Assign the internal_id of the found journal to a variable
+                            break # the loop over identifiers is interrupted (break). It is not necessary to check other identifiers for this journal since a match has already been found.
 
-                if existing_journal_id: # Se è stato trovato un internal_id di un journal esistente:
-                    current_journal_id = existing_journal_id # L'internal_id corrente del journal da elaborare è quello esistente.
+                if existing_journal_id: # If an internal_id of an existing journal was found:
+                    current_journal_id = existing_journal_id # The current internal_id of the journal to process is the existing one.
 
-                else: # Altrimenti, se `existing_journal_id` è rimasto `None` (cioè il journal non esiste ancora nel database).
-                    current_journal_id = f'journal-{journal_counter}' # Crea un nuovo internal_id per il journal.
-                    try: # Inizia un blocco try per gestire potenziali errori di integrità.
-                        cursor.execute("INSERT INTO Journal (internal_id) VALUES (?)", (current_journal_id,)) # Tenta di inserire il nuovo journal con il suo rispettivo internal_id (es. journal-numero a caso).
-                        journal_counter += 1 # Incrementa il contatore per il prossimo nuovo journal.
+                else: # Otherwise, if `existing_journal_id` is still `None` (i.e., the journal does not yet exist in the database).
+                    current_journal_id = f'journal-{journal_counter}' # Create a new internal_id for the journal
+                    try: # Start a try block to handle potential integrity errors
+                        cursor.execute("INSERT INTO Journal (internal_id) VALUES (?)", (current_journal_id,)) # Attempt to insert the new journal with its internal_id (e.g., journal-random number)
+                        journal_counter += 1 # Increment the counter for the next new journal
 
-                    except sqlite3.IntegrityError: # Cattura l'eccezione se si verifica un errore di integrità (es. ID duplicato inatteso).
-                        print(f"Warning: Journal ID '{current_journal_id}' already exists (unexpected). Skipping insertion of this journal.") # Stampa un avviso.
-                        continue # Salta l'elaborazione del `journal_entry` corrente e passa al successivo.
-                    # N.B. Questa clausola cattura un errore IntegrityError che potrebbe verificarsi se, per qualche ragione inattesa, 
-                    # l'ID current_journal_id dovesse già esistere (sebbene il sistema di contatori dovrebbe evitarlo, 
-                    # è una buona pratica difensiva). In tal caso, viene stampato un avviso e il ciclo passa alla prossima voce journal_entry (continue) 
-                    # senza elaborare ulteriormente quella corrente, evitando un crash.
+                    except sqlite3.IntegrityError: # Catch the exception if an integrity error occurs (e.g., unexpected duplicate ID)
+                        print(f"Warning: Journal ID '{current_journal_id}' already exists (unexpected). Skipping insertion of this journal.") # Print a warning
+                        continue # Skip processing the current `journal_entry` and move to the next.
+                    # N.B. This clause catches an IntegrityError that may occur if, for some unexpected reason, 
+                    # the current_journal_id already exists (although the counter system should prevent it, 
+                    # it is good defensive practice). In that case, a warning is printed and the loop moves to the next journal_entry (continue) 
+                    # without further processing the current one, avoiding a crash.
 
-                # Una volta che il codice ha determinato il current_journal_id per la voce JSON che sta elaborando, procede ad associare a quel journal_id (journal-numero a cui si trova il contatore) tutti gli identifiers (cioè ISSN e EISSN) presenti nella lista journal_identifiers del JSON.
+                # Once the code has determined the current_journal_id for the JSON entry being processed, it proceeds to associate to that journal_id (journal-number according to the counter) all identifiers (i.e., ISSN and EISSN) present in the journal_identifiers list in the JSON.
 
-                # Inserimento Identificatori
-                for identifier in journal_identifiers: # Itera su ogni identificatore del journal corrente.
+                # Inserting Identifiers
+                for identifier in journal_identifiers: # Iterates over each identifier of the current journal
                     cursor.execute('''
                         INSERT OR IGNORE INTO JournalIdentifier (journal_id, identifier)
                         VALUES (?, ?)
-                    ''', (current_journal_id, identifier)) # Inserisce l'identificatore associato al journal. `INSERT OR IGNORE` evita duplicati se l'identificatore esiste già per quel journal.
+                    ''', (current_journal_id, identifier)) # Inserts the identifier associated with the journal. `INSERT OR IGNORE` avoids duplicates if the identifier already exists for that journal.
                 
-                # Inserimento Categorie e associazione HasCategory
-                for category_data in journal_entry.get('categories', []): # Itera su ogni elemento della lista 'categories' nel JSON.
-                    category_name = sanitize(category_data.get('id', '')).strip() # Estrae e sanifica il nome della categoria. 
-                    quartile = category_data.get('quartile', '').strip() # Estrae il quartile della categoria.
+                # Inserting Categories and HasCategory association
+                for category_data in journal_entry.get('categories', []): # Iterates over each item in the 'categories' list in the JSON
+                    category_name = sanitize(category_data.get('id', '')).strip() # Extracts and sanitizes the category name 
+                    quartile = category_data.get('quartile', '').strip() # Extracts the category's quartile
 
-                    if not category_name: # Salta se il nome della categoria è vuoto dopo la sanificazione.
+                    if not category_name: # Skip if the category name is empty after sanitization.
                         continue
 
-                    cursor.execute("SELECT category_id FROM Category WHERE category = ? AND quartile = ?", (category_name, quartile)) # Esegue una query per vedere se esiste già una categoria con lo stesso nome (category) e quartile nel database. È fondamentale controllare entrambi i campi, perché la stessa categoria potrebbe avere quartili diversi.
-                    existing_cat = cursor.fetchone() # Recupera la prima riga del risultato.
+                    cursor.execute("SELECT category_id FROM Category WHERE category = ? AND quartile = ?", (category_name, quartile)) # Runs a query to see if a category with the same name and quartile already exists in the database. Checking both fields is essential, as the same category may have different quartiles.
+                    existing_cat = cursor.fetchone() # Retrieves the first row of the result.
                     
-                    if existing_cat: # Se la categoria (associata a quel quartile) esiste già:
-                        cat_id_to_use = existing_cat[0] # Usa il category_id (cat-numero) esistente della categoria.
-                    else: # Se invece la categoria (associata a quel quartile) non esiste:
-                        cat_id_to_use = f'cat-{cat_counter}' # Crea un nuovo category_id per la categoria.
+                    if existing_cat: # If the category (with that quartile) already exists:
+                        cat_id_to_use = existing_cat[0] # Use the existing category_id (cat-number) of the category.
+                    else: # If the category (with that quartile) does not exist:
+                        cat_id_to_use = f'cat-{cat_counter}' # Create a new category_id for the category.
 
-                        try: # Inizia un blocco try per gestire potenziali errori di integrità.
+                        try: # Start a try block to handle potential integrity errors
                             cursor.execute('''
                                 INSERT INTO Category (category_id, category, quartile)
                                 VALUES (?, ?, ?)
-                            ''', (cat_id_to_use, category_name, quartile)) # Tenta di inserire la nuova categoria.
-                            cat_counter += 1 # Incrementa il contatore per la prossima nuova categoria.
+                            ''', (cat_id_to_use, category_name, quartile)) # Attempt to insert the new category
+                            cat_counter += 1 # Increment the counter for the next new category
 
-                        except sqlite3.IntegrityError: # Cattura l'eccezione se si verifica un errore di integrità.
+                        except sqlite3.IntegrityError: # Catch the exception if an integrity error occurs
                             print(f"Warning: Category ID {cat_id_to_use} or category/quartile combination already exists (unexpected). Skipping association for this category.")
 
-                    # Inserimento nella tabella HasCategory per associare il journal alla categoria.
+                    # Inserting into HasCategory table to associate the journal with the category.
                     cursor.execute('''
                         INSERT OR IGNORE INTO HasCategory (journal_id, category_id)
                         VALUES (?, ?)
-                    ''', (current_journal_id, cat_id_to_use)) # `INSERT OR IGNORE` evita duplicati se l'associazione esiste già.
+                    ''', (current_journal_id, cat_id_to_use)) # `INSERT OR IGNORE` avoids duplicates if the association already exists.
                 
-                # Inserimento Aree e associazione HasArea
-                for area_name_raw in journal_entry.get('areas', []): # Itera su ogni elemento della lista 'areas' nel JSON.
-                    if isinstance(area_name_raw, str): # Verifica se il nome dell'area è una stringa.
-                        # Qui utilizziamo isinstance a differenza di come abbiamo fatto per le category
-                        # La differenza nel trattamento sta nella struttura attesa degli elementi all'interno delle liste JSON:
-                        # Per le aree, ti aspetti una lista di stringhe. isinstance(str) è una guardia per assicurarsi che stai operando su stringhe
-                        # Per le categorie, ti aspetti una lista di dizionari. L'accesso ai dati avviene tramite .get('chiave', ''), che è già un modo robusto per estrarre valori da un dizionario, gestendo l'assenza della chiave restituendo una stringa vuota. 
-                        # Se l'elemento stesso non fosse un dizionario, l'errore si manifesterebbe a un livello più alto (quando cerchi di chiamare .get() su di esso).
-                        safe_area_name = sanitize(area_name_raw.strip()) # Sanifica e pulisce il nome dell'area.
-                        if not safe_area_name: # Se il nome dell'area non è una stringa valida, cioè è uns stringa vuota oppure lo è diventata dopo la sanificazione:
+                # Inserting Areas and HasArea association
+                for area_name_raw in journal_entry.get('areas', []): # Iterates over each item in the 'areas' list in the JSON.
+                    if isinstance(area_name_raw, str): # Checks if the area name is a string.
+                        # Here we use isinstance unlike how we handled categories
+                        # The difference in handling lies in the expected structure of the elements in the JSON lists:
+                        # While for categories, we expect a list of dictionaries, for areas, we expect a list of strings. 
+                        safe_area_name = sanitize(area_name_raw.strip()) # Cleans the area name.
+                        if not safe_area_name: # If the area name is not a valid string, i.e., it's an empty string or became empty after sanitization:
                             continue
-                    else: # altrimenti, se il  nome dell'area non è una stringa:
-                        continue # riprendi il loop. Il continue interrompe l'elaborazione e passa all'elemento successivo. 
+                    else: # otherwise, if the area name is not a string:
+                        continue # resume the loop. The continue stops the current iteration and moves to the next element. 
 
                    
-                    cursor.execute("SELECT area_id FROM Area WHERE area = ?", (safe_area_name,)) # Cerca un'area esistente con lo stesso nome.
-                    existing_area = cursor.fetchone() # Recupera la prima riga del risultato.
+                    cursor.execute("SELECT area_id FROM Area WHERE area = ?", (safe_area_name,)) # Searches for an existing area with the same name.
+                    existing_area = cursor.fetchone() # Retrieves the first row of the result.
                     
-                    if existing_area: # Se l'area esiste già:
-                        area_id_to_use = existing_area[0] # Usa l'area_id (area-numero) esistente dell'area.
-                    else: # Se l'area non esiste:
-                        area_id_to_use = f'area-{area_counter}' # Crea un nuovo area_id (area-numero) per l'area.
+                    if existing_area: # If the area already exists:
+                        area_id_to_use = existing_area[0] # Use the existing area_id (area-number) of the area.
+                    else: # If the area does not exist:
+                        area_id_to_use = f'area-{area_counter}' # Create a new area_id (area-number) for the area.
 
-                        try: # Inizia un blocco try per gestire potenziali errori di integrità.
+                        try: # Start a try block to handle potential integrity errors.
                             cursor.execute('''
                                 INSERT INTO Area (area_id, area)
                                 VALUES (?, ?)
-                            ''', (area_id_to_use, safe_area_name)) # Tenta di inserire la nuova area.
-                            area_counter += 1 # Incrementa il contatore per la prossima nuova area.
+                            ''', (area_id_to_use, safe_area_name)) # Attempt to insert the new area.
+                            area_counter += 1 # Increment the counter for the next new area.
 
-                        except sqlite3.IntegrityError: # Cattura l'eccezione se si verifica un errore di integrità.
-                            print(f"Warning: Area ID '{area_id_to_use}' or area already exists (unexpected). Skipping association for this area.") # Stampa un avviso.
-                            continue # Salta l'associazione per questa area e passa alla successiva.
+                        except sqlite3.IntegrityError: # Catch the exception if an integrity error occurs.
+                            print(f"Warning: Area ID '{area_id_to_use}' or area already exists (unexpected). Skipping association for this area.") # Print a warning.
+                            continue # Skip association for this area and move to the next.
                     
-                    # Inserimento nella tabella HasArea per associare il journal all'area.
+                    # Inserting into HasArea table to associate the journal with the area.
                     cursor.execute('''
                         INSERT OR IGNORE INTO HasArea (journal_id, area_id)
                         VALUES (?, ?)
-                    ''', (current_journal_id, area_id_to_use)) # `INSERT OR IGNORE` evita duplicati se l'associazione esiste già.
+                    ''', (current_journal_id, area_id_to_use)) # `INSERT OR IGNORE` avoids duplicates if the association already exists.
                         
-            # Commit delle modifiche al database.
+            # Committing changes to the database.
             conn.commit()
-            print(f"Data successfully loaded from {path} into database {db_path}.")
+            return True
+            #print(f"Data successfully loaded from {path} into database {db_path}.")
 
-        except sqlite3.Error as e: # Cattura qualsiasi errore specifico di SQLite.
-            print(f"Database error during loading: {e}") # Stampa l'errore.
-            conn.rollback() # Esegue un rollback di tutte le operazioni in caso di errore per mantenere l'integrità del database.
+        except sqlite3.Error as e: # Catch any SQLite-specific error
+            print(f"Database error during loading: {e}") 
+            conn.rollback() # Perform a rollback of all operations in case of error to maintain database integrity.
         
-        # Blocco finally che viene eseguito sempre, indipendentemente dal fatto che si sia verificato un errore o meno.
+        # Finally block that is always executed, regardless of whether an error occurred or not.
         finally:        
-            conn.close() # Chiude la connessione al database.
+            conn.close()
 
 
 
@@ -367,38 +342,30 @@ class CategoryUploadHandler(UploadHandler):
 
 
 import pandas as pd
-import sqlite3
 
 
 class QueryHandler(Handler):
     def __init__(self):
-
         super().__init__()
        
-
-
     def getById(self, id):
         pass
 
 
 class CategoryQueryHandler(QueryHandler):
-    def __init__(self):
-        super().__init__()
-
-
-
     def getById(self, identifier: str) -> pd.DataFrame:
         """
-            Dato un identificatore (e.g., ISSN), restituisce un DataFrame contenente
-            tutti i dati associati al Journal, con categorie e aree aggregate come liste di stringhe.
-            - internal_id
-            - identifier (tutti gli id concatenati)
-            - category (lista di categorie)
-            - quartile (lista di quartili)
-            - area (lista di aree)
+        Given an identifier (e.g., ISSN), returns a DataFrame containing
+        all data associated with the journal, with categories and areas
+        aggregated as lists of strings.
+        - internal_id
+        - identifier (all IDs concatenated)
+        - category (list of categories)
+        - quartile (list of quartiles)
+        - area (list of areas)
 
-            Returns:
-                pd.DataFrame: Un DataFrame con una singola riga per il journal.
+        Returns:
+            pd.DataFrame: A DataFrame with a single row representing the journal.
         """
         db_path = self.getDbPathOrUrl()
         conn = None
@@ -406,7 +373,7 @@ class CategoryQueryHandler(QueryHandler):
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
 
-            # Trova l'internal_id del journal associato all'identifier
+            # Find the internal_id of the journal associated with the identifier
             cursor.execute('''
                 SELECT journal_id FROM JournalIdentifier WHERE identifier = ?
             ''', (identifier,))
@@ -416,7 +383,7 @@ class CategoryQueryHandler(QueryHandler):
 
             journal_id = row[0]
 
-            # Recupera tutti gli identifiers di quel journal, nell’ordine di inserimento
+            # Retrieve all identifiers for that journal, in insertion order
             cursor.execute('''
                 SELECT identifier
                 FROM JournalIdentifier
@@ -426,7 +393,7 @@ class CategoryQueryHandler(QueryHandler):
             identifiers = [r[0] for r in cursor.fetchall()]
             identifiers_str = '; '.join(identifiers)
 
-            # Query completa per categoria e area
+            # Query for category and area
             query = '''
             SELECT
                 J.internal_id,
@@ -451,20 +418,20 @@ class CategoryQueryHandler(QueryHandler):
                     'area': [[]]
                 })
 
-            # Crea coppie (category, quartile) per mantenere l'allineamento
+            # Create (category, quartile) pairs to maintain alignment
             df['category_quartile'] = list(zip(df['category'], df['quartile']))
 
-            # Aggregazione
+            # Aggregation
             aggregated = df.groupby('internal_id').agg({
                 'category_quartile': lambda x: list({(cat, q) for cat, q in x if cat is not None}),
                 'area': lambda x: list(x.dropna().unique())
             }).reset_index()
 
-            # Estrai liste separate da category_quartile
+            # Extract separate lists from category_quartile
             aggregated['category'] = aggregated['category_quartile'].apply(lambda x: [cat for cat, _ in x])
             aggregated['quartile'] = aggregated['category_quartile'].apply(lambda x: [q for _, q in x])
 
-            # Inserisci identifier e rimuovi la colonna temporanea
+            # Insert identifier and remove the temporary column
             aggregated.insert(1, 'identifier', identifiers_str)
             aggregated.drop(columns=['category_quartile'], inplace=True)
 
@@ -499,6 +466,7 @@ class CategoryQueryHandler(QueryHandler):
             if conn:
                 conn.close()
 
+
     def getAllAreas(self) -> pd.DataFrame:
         """
         Returns a data frame containing all the distinct area names included in the database.
@@ -519,6 +487,7 @@ class CategoryQueryHandler(QueryHandler):
         finally:
             if conn:
                 conn.close()
+
 
     def getCategoriesWithQuartile(self, quartiles: list[str]) -> pd.DataFrame:
         """
@@ -570,10 +539,9 @@ class CategoryQueryHandler(QueryHandler):
             pd.DataFrame: A DataFrame with a single column:
                           - 'category' (str): The name of the category.
         """
-        db_path = self.getDbPathOrUrl()
         conn = None
         try:
-            conn = sqlite3.connect(db_path)
+            conn = sqlite3.connect(self.getDbPathOrUrl())
             params = [] # Initialize parameters list
 
             # Step 1: Determine the area IDs based on the provided area names
@@ -583,8 +551,8 @@ class CategoryQueryHandler(QueryHandler):
                     SELECT DISTINCT C.category AS category
                     FROM Category C
                 """
-                # Note: No need to join with HasCategory/HasArea if we just want all *existing* categories
-                # that *could* be assigned. If you only want categories that are *actually assigned to at least one journal*,
+                # Note: No need to join with HasCategory/HasArea if we just want all existing categories
+                # that could be assigned. If you only want categories that are *actually assigned to at least one journal*,
                 # you'd need to join with HasCategory. Let's assume for now you want all categories that exist in the Category table.
                 # If the intent is "all categories *that are linked to any journal in any area*", then the query below is correct.
                 # For this specific request "without the dict", and "no repetitions", a simple SELECT DISTINCT category is suitable
@@ -596,6 +564,7 @@ class CategoryQueryHandler(QueryHandler):
                     SELECT DISTINCT C.category AS category
                     FROM HasCategory HC
                     JOIN Category C ON HC.category_id = C.category_id
+
                 """
                 params = []
             else:
@@ -652,12 +621,10 @@ class CategoryQueryHandler(QueryHandler):
         Returns:
             pd.DataFrame: A DataFrame with a single column:
                           - 'area' (str): The name of the area.
-        
         """
-        db_path = self.getDbPathOrUrl()
         conn = None
         try:
-            conn = sqlite3.connect(db_path)
+            conn = sqlite3.connect(self.getDbPathOrUrl())
             params = [] # Initialize parameters list
 
 
@@ -707,15 +674,63 @@ class CategoryQueryHandler(QueryHandler):
         finally:
             if conn:
                 conn.close()
+
+
+                
+    def getJournalsByArea(self, area_names: set[str]) -> pd.DataFrame:
+        """
+        Returns a DataFrame containing journal identifiers (ISSN/EISSN) for journals
+        that are associated with the specified areas.
+        
+        Args:
+            area_names (set[str]): Set of area names to filter by. If empty, returns all journals.
+            
+        Returns:
+            pd.DataFrame: DataFrame with 'identifier' column containing combined ISSN/EISSN strings
+        """
+        db_path = self.getDbPathOrUrl()
+        conn = None
+        try:
+            conn = sqlite3.connect(db_path)
+            
+            if not area_names:
+                # If no areas specified, get all journal identifiers
+                query = """
+                    SELECT DISTINCT GROUP_CONCAT(JI.identifier, '; ') AS identifier
+                    FROM JournalIdentifier JI
+                    GROUP BY JI.journal_id
+                """
+                df = pd.read_sql_query(query, conn)
+
+            else:
+                # Get journals associated with the specified areas
+                placeholders = ','.join(['?'] *len(area_names))
+                query = f"""
+                    SELECT DISTINCT GROUP_CONCAT(JI.identifier, '; ') AS identifier
+                    FROM Area A
+                    JOIN HasArea HA ON A.area_id = HA.area_id
+                    JOIN JournalIdentifier JI ON HA.journal_id = JI.journal_id
+                    WHERE A.area IN ({placeholders})
+                    GROUP BY JI.journal_id
+                """
+                df = pd.read_sql_query(query, conn, params=list(area_names))
+                
+            return df
+            
+        except sqlite3.Error as e:
+            print(f"Database error in getJournalsByArea: {e}")
+            return pd.DataFrame()
+        finally:
+            if conn:
+                conn.close()            
     
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
-
 # SILVIA
 
-# Dal CSV al Graph Database
+# From csv file to Graph db
 
 
 from rdflib import Graph, URIRef, Literal, RDF
@@ -724,31 +739,42 @@ from pandas import read_csv
 
 
 class JournalUploadHandler(UploadHandler):
+    """
+    A handler class for uploading journal metadata to a graph database.
+    
+    Inherits from UploadHandler and implements the specific logic for processing journal data 
+    from CSV files and converting it into RDF triples for storage in a Blazegraph SPARQL endpoint.
+    """
     def __init__(self):
         super().__init__()
 
+   
     def pushDataToDb(self, path):
-        if not self.getDbPathOrUrl():
+        # Check if database endpoint is configured
+        db_endpoint = self.getDbPathOrUrl()
+        if not db_endpoint:
             return False
 
-        # Leggo il csv:
+        # Read csv file with pandas--> df:
         file_csv = read_csv(path, 
-                          keep_default_na=False,
+                          keep_default_na=False,  #empty cells --> empty strings
                           dtype={
                               "Journal title": "string",
                               "Journal ISSN (print version)": "string",
                               "Journal EISSN (online version)": "string",
                               "Languages in which the journal accepts manuscripts": "string",
                               "Publisher": "string",
-                              "DOAJ Seal": "string",  # Convertiremo manualmente a boolean
+                              "DOAJ Seal": "string",  # will be converted to boolean 
                               "Journal license": "string",
-                              "APC": "string"        # Convertiremo manualmente a boolean
+                              "APC": "string"         # will be converted to boolean
                           })
-    
+        
+        # Initialize RDF graph
         graph = Graph()
         
-        # Definizione delle classi e proprietà RDF
+        # Define RDF classes and properties
         Journal = URIRef("https://schema.org/Periodical")
+
         title = URIRef("https://schema.org/name")
         identifier = URIRef("https://schema.org/identifier")
         language = URIRef("https://schema.org/inLanguage")
@@ -758,105 +784,91 @@ class JournalUploadHandler(UploadHandler):
         apc = URIRef("https://www.wikidata.org/wiki/Q15291071") 
 
        
-        base_url = "https://comp-data.github.io/res/"
+        base_url = "https://github.com/elenavalente31/data_flamess"
 
-        journal_id_dict = {}
-
+        # Iterate over each row 
         for idx, row in file_csv.iterrows():
         
-            # Crea l'URI per il journal
+            # Create local unique identifier for each journal
             local_id = "journal-" + str(idx)
             subj = URIRef(base_url+ local_id)
             
-            # Aggiunge il tipo del journal
+            
             graph.add((subj, RDF.type, Journal)) 
             
-            # Aggiunge le proprietà
+            # Add title 
             if row["Journal title"]:
-                title_value = row["Journal title"]
+                title_value = row["Journal title"].strip()
                 graph.add((subj, title, Literal(title_value)))
 
-            
+            # Collect and store identifiers
             identifiers = []
 
             if row["Journal ISSN (print version)"]:
-                issn_value = row["Journal ISSN (print version)"]
+                issn_value = row["Journal ISSN (print version)"].strip()
                 identifiers.append(issn_value)
-                journal_id_dict[issn_value] = subj
-
+            
             if row["Journal EISSN (online version)"]:
-                eissn_value = row["Journal EISSN (online version)"]
+                eissn_value = row["Journal EISSN (online version)"].strip()
                 identifiers.append(eissn_value)
-                journal_id_dict[eissn_value] = subj
 
-            # Se almeno uno dei due identificatori è presente, aggiungilo
+            # Add identifiers
             if identifiers:
-                combined_identifier = "; ".join(identifiers)
-                graph.add((subj, identifier, Literal(combined_identifier)))
+                combined_identifier = "; ".join(identifiers) # from a list of strings to a unique string
+                graph.add((subj, identifier, Literal(combined_identifier.strip())))
              
-            # Languages 
+            # Add languages 
             if row["Languages in which the journal accepts manuscripts"]:
                 languages_str = row["Languages in which the journal accepts manuscripts"]
-                languages_list = languages_str.split(",")
+                languages_list = languages_str.split(",") # from a unique string to a list of strings
                 for lang in languages_list:
                     clean_lang = lang.strip()
                     if clean_lang:  
                         graph.add((subj, language, Literal(clean_lang)))
 
-            # Publisher
+            # Add publisher
             if row["Publisher"]:
-                publisher_value = row["Publisher"]
+                publisher_value = row["Publisher"].strip()
                 graph.add((subj, publisher, Literal(publisher_value)))
             
-            # DOAJ Seal (convertito in booleano)
+            # Convert DOAJ Seal (Yes/No) to boolean and add to graph
             if row["DOAJ Seal"]:
-                doaj_value = True if row["DOAJ Seal"].lower() == "yes" else False
+                doaj_clean = row["DOAJ Seal"].strip().lower()  # .lower()= to avoid ambiguity comparing strings
+                doaj_value = True if doaj_clean == "yes" else False
                 graph.add((subj, seal, Literal(doaj_value)))
             
-            # Journal license
+            # Add license (unique string)
             if row["Journal license"]:
-                license_value = row["Journal license"]
+                license_value = row["Journal license"].strip()
                 graph.add((subj, license, Literal(license_value)))
             
-            # APC (convertito in booleano)
+            # Convert APC (Yes/No) to boolean and add to graph
             if row["APC"]:
-                apc_value = True if row["APC"].lower() == "yes" else False
+                apc_clean = row["APC"].strip().lower()  # .lower()= to avoid ambiguity comparing strings
+                apc_value = True if apc_clean == "yes" else False
                 graph.add((subj, apc, Literal(apc_value)))
 
        
-        
-        store = SPARQLUpdateStore()
+        # Connect to SPARQL endpoint and upload all triples
+        store = SPARQLUpdateStore()     # proxy
         endpoint = self.getDbPathOrUrl()
         
         
         store.open((endpoint, endpoint))
-        data = graph.serialize(format="nt")
-        query = f"INSERT DATA {{\n{data}\n}}"
-        store.update(query)
-
-
-        #for triple in graph.triples((None, None, None)):
-        #    store.add(triple)
+        for triple in graph.triples((None, None, None)):   # we used triples method from Graph class
+            store.add(triple)
         store.close()
 
         return True
 
-
-
-
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
-
-
 # ELENA
-from rdflib import Graph, URIRef, Literal, RDF
-from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore
+
 from sparql_dataframe import get
 
-
-
-# Definizione class QueryHandler e JournalQueryHandler
+# Definition of JournalQueryHandler class, subclass of QueryHandler.
 
 
 class JournalQueryHandler(QueryHandler):
@@ -887,33 +899,33 @@ class JournalQueryHandler(QueryHandler):
     
     def __init__(self):
         super().__init__()
-        
+
 
 
     def getById(self, id):
         
         if not id:
-            return pd.DataFrame() #if there's no value specified as id, or if it's empty, returns an empty DataFrame
+            return pd.DataFrame() # if there's no value specified as id, or if it's empty, returns an empty DataFrame
 
-        filter_id = f 'FILTER (
-            STR(?identifier) = "{id}" ||
-            STRSTARTS(STR(?identifier), "{id}; ") ||
-            STRENDS(STR(?identifier), "; {id}")
-         
-        )'
+        filter_id = f''' 
+            FILTER(
+                STR(?identifier) = "{id}" ||          # Single ID
+                STRSTARTS(STR(?identifier), "{id}; ") ||  # First of two IDs
+                STRENDS(STR(?identifier), "; {id}")       # Second of two IDs
+            )
+        '''
         
-        #applies the id filter to the basic query
-        
-        query = self.PREFIXES + self.BASE_QUERY.format(filter=filter_id) #final query of the method, that contains prefixes, base query and the specific filter
+        query = self.PREFIXES + self.BASE_QUERY.format(filter=filter_id) # final query of the method, that contains prefixes, base query and the specific filter
+
         endpoint = self.getDbPathOrUrl()
         df = get(endpoint, query, True)
+
         return df
 
-    
 
     def getAllJournals(self):
 
-        #here there's no filter applied to the basic query. the method just returns all the journals as they are stored in the database
+        # here there's no filter applied to the basic query. the method just returns all the journals as they are stored in the database
 
         query= self.PREFIXES + self.BASE_QUERY.format(filter="")
 
@@ -926,22 +938,17 @@ class JournalQueryHandler(QueryHandler):
     
     def getJournalsWithTitle(self, partialTitle):
 
-        #filter_title is the specific filter for this method. It basically assures that the partialTitle specified will match perfectly and/or partially
+        # filter_title is the specific filter for this method. It basically assures that the partialTitle specified will match perfectly and/or partially
         
         filter_title= f'FILTER(CONTAINS(LCASE(?title), LCASE("{partialTitle}")))' 
         
-        query= self.PREFIXES + self.BASE_QUERY.format(filter= filter_title)  #the filter gets applied to the final query of the method
+        query= self.PREFIXES + self.BASE_QUERY.format(filter= filter_title)  # the filter gets applied to the final query of the method
 
         endpoint = self.getDbPathOrUrl()
         df = get(endpoint, query, True)
 
         return df
 
-        
-
-        ####escaped_title = partialTitle.replace('\\', '\\\\').replace('"', '\\"')
-        #### e poi nel FILTER si inserisce {escapedTitle} 
-        #da valutare?
     
 
     def getJournalsPublishedBy(self, partialName):
@@ -950,7 +957,7 @@ class JournalQueryHandler(QueryHandler):
             
             return pd.DataFrame() #if there is not a value in input, or if there's an empty value, returns an empty DataFrame
 
-        #filter_publisher is the specific filter for this method. It basically assures that the partialName specified will match perfectly and/or partially
+        # filter_publisher is the specific filter for this method. It basically assures that the partialName specified will match perfectly and/or partially
         
         filter_publisher = f'FILTER(CONTAINS(LCASE(?publisher), LCASE("{partialName}")))'
 
@@ -961,41 +968,53 @@ class JournalQueryHandler(QueryHandler):
 
         return df
     
-
     
-    def getJournalsWithLicense(self,license):
-        if not license:
+    def getJournalsWithLicense(self, licenses: set[str]):
+        """
+        Returns a DataFrame containing all journals that have any of the specified licenses.
+        If the input set is empty, returns all journals.
+        
+        Returns:
+            pd.DataFrame: A DataFrame containing matching journals
+        """
+        if not licenses:
             return self.getAllJournals()
-        
-        license = license.strip().upper()
     
-        # Crea un filtro che cerca:
-        # 1. Licenza esatta (es. "CC BY")
-        # 2. Licenza all'inizio della stringa (es. "CC BY, CC BY-ND")
-        # 3. Licenza nel mezzo (es. "CC BY-ND, CC BY")
-        # 4. Licenza alla fine (es. "CC BY-NC, CC BY")
-        filter_license = f'
-            FILTER(
-                STR(?license) = "{license}" ||
-                STRSTARTS(STR(?license), "{license}, ") ||
-                CONTAINS(STR(?license), ", {license}, ") ||
-                STRENDS(STR(?license), ", {license}")
-            )'
-        query= self.PREFIXES + self.BASE_QUERY.format(filter=filter_license)
-        
+        # Clean and prepare license strings
+        cleaned_licenses = {license.strip().upper() for license in licenses if license.strip()}
+    
+        # Build the license filter condition
+        license_conditions = []
+        for license in cleaned_licenses:
+            # Each license can match in 4 possible ways in the string:
+            # 1. Exact match
+            # 2. At start of list
+            # 3. In middle of list
+            # 4. At end of list
+            conditions = [
+                f'STR(?license) = "{license}"',
+                f'STRSTARTS(STR(?license), "{license}, ")',
+                f'CONTAINS(STR(?license), ", {license}, ")',
+                f'STRENDS(STR(?license), ", {license}")'
+            ]
+            license_conditions.append(f'({" || ".join(conditions)})')
+    
+        # Combine all license conditions with OR
+        filter_license = f'FILTER({" || ".join(license_conditions)})' if license_conditions else ""
+    
+        query = self.PREFIXES + self.BASE_QUERY.format(filter=filter_license)
+    
         endpoint = self.getDbPathOrUrl()
-        df = get(endpoint, query, True)  #creates a DataFrame with the values of ?license
-        
-
-        return df
+        df = get(endpoint, query, True)
     
+        return df
     
 
     def getJournalsWithAPC(self):
 
-        filter_tapc= f'FILTER(LCASE(STR(?apc)) = "true")'  #creates the filter for the boolean "true" 
+        filter_tapc= f'FILTER(LCASE(STR(?apc)) = "true")'  # creates the filter for the boolean "true" 
         
-        query= self.PREFIXES + self.BASE_QUERY.format(filter= filter_tapc) #applies it to the final query of the method
+        query= self.PREFIXES + self.BASE_QUERY.format(filter= filter_tapc) # applies it to the final query of the method
         
         endpoint = self.getDbPathOrUrl()
         
@@ -1007,9 +1026,9 @@ class JournalQueryHandler(QueryHandler):
 
     def getJournalsWithoutAPC(self): 
 
-        filter_fapc = f'FILTER(LCASE(STR(?apc)) = "false")'  #creates the filter for the boolean "false"
+        filter_fapc = f'FILTER(LCASE(STR(?apc)) = "false")'  # creates the filter for the boolean "false"
        
-        query= self.PREFIXES + self.BASE_QUERY.format(filter=filter_fapc)  #applies it to the final query of the method
+        query= self.PREFIXES + self.BASE_QUERY.format(filter=filter_fapc)  # applies it to the final query of the method
         
         endpoint = self.getDbPathOrUrl()
         
@@ -1021,14 +1040,13 @@ class JournalQueryHandler(QueryHandler):
 
     def getJournalsWithDOAJSeal(self):
      
-        filter_seal= f'FILTER(LCASE(STR(?seal)) = "true")' #creates the filter for the boolean value "true"
+        filter_seal= f'FILTER(LCASE(STR(?seal)) = "true")' # creates the filter for the boolean value "true"
         
-        query = self.PREFIXES+ self.BASE_QUERY.format(filter=filter_seal) #applies it to the final query of the method
+        query = self.PREFIXES+ self.BASE_QUERY.format(filter=filter_seal) # applies it to the final query of the method
 
         endpoint = self.getDbPathOrUrl()
         
         df = get(endpoint, query, True)
-
         return df
 
 
