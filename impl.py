@@ -457,10 +457,11 @@ class CategoryQueryHandler(QueryHandler):
             conn = sqlite3.connect(db_path)
             query = "SELECT DISTINCT category FROM Category"  # query to retrieve all unique category names
             df = pd.read_sql_query(query, conn)
-            return df
+            df = df.rename(columns={df.columns[0]: 'category'})
+            return df[['category']]
         except sqlite3.Error as e:
             print(f"Database error in getAllCategories: {e}")
-            return pd.DataFrame()
+            return pd.DataFrame(columns=['category'])
         finally:
             if conn:
                 conn.close()
@@ -479,10 +480,11 @@ class CategoryQueryHandler(QueryHandler):
             conn = sqlite3.connect(db_path)
             query = "SELECT DISTINCT area FROM Area" # query to get all unique area names
             df = pd.read_sql_query(query, conn)
-            return df
+            df =df.rename(columns={df.columns[0]: 'area'})
+            return df[['area']]
         except sqlite3.Error as e:
             print(f"Database error in getAllAreas: {e}")
-            return pd.DataFrame()
+            return pd.DataFrame(columns=['area'])
         finally:
             if conn:
                 conn.close()
@@ -898,13 +900,13 @@ class JournalQueryHandler(QueryHandler):
         if not id:
             return pd.DataFrame() # if there's no value specified as id, or if it's empty, returns an empty DataFrame
 
-        filter_id = f '''
+        filter_id = f"""  
             FILTER(
                 STR(?identifier) = "{id}" ||          # Single ID
                 STRSTARTS(STR(?identifier), "{id}; ") ||  # First of two IDs
                 STRENDS(STR(?identifier), "; {id}")       # Second of two IDs
             )
-        '''
+        """
         
         query = self.PREFIXES + self.BASE_QUERY.format(filter=filter_id) # final query of the method, that contains prefixes, base query and the specific filter
 
@@ -1042,4 +1044,3 @@ class JournalQueryHandler(QueryHandler):
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
