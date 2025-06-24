@@ -859,7 +859,7 @@ class JournalUploadHandler(UploadHandler):
 
 from sparql_dataframe import get
 
-# Definition of the JournalQueryHandler class
+# Definition of the QueryHandler and JournalQueryHandler classes
 
 
 class JournalQueryHandler(QueryHandler):
