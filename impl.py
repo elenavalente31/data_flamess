@@ -72,8 +72,7 @@ class Area(IdentifiableEntity):
 
 
 
-# Data loading management.
-#classes Handler and UploadHandler
+# Data loading management (JSON -> SQL)
 
 class Handler():
     
@@ -379,9 +378,9 @@ class CategoryQueryHandler(QueryHandler):
             ''', (identifier,))
             row = cursor.fetchone()
             if not row:
-                return pd.DataFrame()
+                return pd.DataFrame() # if no journal is found, return an empty DataFrame
 
-            journal_id = row[0]
+            journal_id = row[0] # we extract the journal_id from the fetched row
 
             # Retrieve all identifiers for that journal, in insertion order
             cursor.execute('''
@@ -389,7 +388,7 @@ class CategoryQueryHandler(QueryHandler):
                 FROM JournalIdentifier
                 WHERE journal_id = ?
                 ORDER BY rowid
-            ''', (journal_id,))
+            ''', (journal_id,)) # we get all identifiers for the journal that was found
             identifiers = [r[0] for r in cursor.fetchall()]
             identifiers_str = '; '.join(identifiers)
 
@@ -406,7 +405,7 @@ class CategoryQueryHandler(QueryHandler):
             LEFT JOIN HasArea AS HA ON J.internal_id = HA.journal_id
             LEFT JOIN Area AS A ON HA.area_id = A.area_id
             WHERE J.internal_id = ?
-            '''
+            '''  # query to retrieve journal, category and area data
             df = pd.read_sql_query(query, conn, params=(journal_id,))
 
             if df.empty:
@@ -416,7 +415,7 @@ class CategoryQueryHandler(QueryHandler):
                     'category': [[]],
                     'quartile': [[]],
                     'area': [[]]
-                })
+                }) #if no category/ area data exists, return a DataFrame with empty lists for those columns
 
             # Create (category, quartile) pairs to maintain alignment
             df['category_quartile'] = list(zip(df['category'], df['quartile']))
@@ -425,15 +424,15 @@ class CategoryQueryHandler(QueryHandler):
             aggregated = df.groupby('internal_id').agg({
                 'category_quartile': lambda x: list({(cat, q) for cat, q in x if cat is not None}),
                 'area': lambda x: list(x.dropna().unique())
-            }).reset_index()
+            }).reset_index() # we group data by journal ID and aggregate categories/quartiles and areas into unique lists
 
             # Extract separate lists from category_quartile
-            aggregated['category'] = aggregated['category_quartile'].apply(lambda x: [cat for cat, _ in x])
-            aggregated['quartile'] = aggregated['category_quartile'].apply(lambda x: [q for _, q in x])
+            aggregated['category'] = aggregated['category_quartile'].apply(lambda x: [cat for cat, _ in x]) # separation of categories from the combined tuples
+            aggregated['quartile'] = aggregated['category_quartile'].apply(lambda x: [q for _, q in x]) # separation of quartiles from the combined tuples
 
             # Insert identifier and remove the temporary column
             aggregated.insert(1, 'identifier', identifiers_str)
-            aggregated.drop(columns=['category_quartile'], inplace=True)
+            aggregated.drop(columns=['category_quartile'], inplace=True) # remove the temporary combined column
 
             return aggregated
 
@@ -456,7 +455,7 @@ class CategoryQueryHandler(QueryHandler):
         conn = None
         try:
             conn = sqlite3.connect(db_path)
-            query = "SELECT DISTINCT category FROM Category"
+            query = "SELECT DISTINCT category FROM Category"  # query to retrieve all unique category names
             df = pd.read_sql_query(query, conn)
             return df
         except sqlite3.Error as e:
@@ -478,7 +477,7 @@ class CategoryQueryHandler(QueryHandler):
         conn = None
         try:
             conn = sqlite3.connect(db_path)
-            query = "SELECT DISTINCT area FROM Area"
+            query = "SELECT DISTINCT area FROM Area" # query to get all unique area names
             df = pd.read_sql_query(query, conn)
             return df
         except sqlite3.Error as e:
@@ -489,12 +488,12 @@ class CategoryQueryHandler(QueryHandler):
                 conn.close()
 
 
-    def getCategoriesWithQuartile(self, quartiles: list[str]) -> pd.DataFrame:
+    def getCategoriesWithQuartile(self, quartiles: set[str]) -> pd.DataFrame:
         """
         Returns a DataFrame containing all categories with the specified quartiles.
 
         Args:
-            quartiles (list[str]): A list of quartiles (e.g., ['Q1', 'Q2']) to filter by.
+            quartiles (set[str]): A set of quartiles (e.g., {'Q1', 'Q2'}) to filter by.
                                    If empty, returns all categories with their quartiles.
 
         Returns:
@@ -505,13 +504,13 @@ class CategoryQueryHandler(QueryHandler):
         try:
             conn = sqlite3.connect(db_path)
 
-            base_query = "SELECT category, quartile FROM Category"
+            base_query = "SELECT category, quartile FROM Category"  # query to select categories and quartiles
 
             if not quartiles:
                 df = pd.read_sql_query(base_query, conn)
             else:
-                placeholders = ','.join('?' * len(quartiles))
-                query = f"{base_query} WHERE quartile IN ({placeholders})"
+                placeholders = ','.join('?' * len(quartiles)) # we create placeholders for the SQL IN clause
+                query = f"{base_query} WHERE quartile IN ({placeholders})" # we add a WHERE to filter by specified quartiles
                 df = pd.read_sql_query(query, conn, params=list(quartiles))
 
             return df
@@ -544,20 +543,13 @@ class CategoryQueryHandler(QueryHandler):
             conn = sqlite3.connect(self.getDbPathOrUrl())
             params = [] # Initialize parameters list
 
-            # Step 1: Determine the area IDs based on the provided area names
+            # Determine the area IDs based on the provided area names
             if not area_names:
                 # If no area names are provided, we query for all distinct categories.
                 query = """
                     SELECT DISTINCT C.category AS category
                     FROM Category C
                 """
-                # Note: No need to join with HasCategory/HasArea if we just want all existing categories
-                # that could be assigned. If you only want categories that are *actually assigned to at least one journal*,
-                # you'd need to join with HasCategory. Let's assume for now you want all categories that exist in the Category table.
-                # If the intent is "all categories *that are linked to any journal in any area*", then the query below is correct.
-                # For this specific request "without the dict", and "no repetitions", a simple SELECT DISTINCT category is suitable
-                # unless the underlying logic *must* involve journals for filtering.
-                # Let's adjust to be consistent with previous logic that implicitly meant "assigned to at least one journal".
 
                 # Revised query for 'all areas specified' (i.e., all categories assigned to any journal)
                 query = """
@@ -565,23 +557,23 @@ class CategoryQueryHandler(QueryHandler):
                     FROM HasCategory HC
                     JOIN Category C ON HC.category_id = C.category_id
 
-                """
+                """ # query to get all distinct categories assigned to any journal 
                 params = []
             else:
-                # First, retrieve the actual area_ids from the Area table using the provided area_names.
+                # Retrieve the actual area_ids from the Area table using the provided area_names
                 area_name_placeholders = ','.join(['?'] * len(area_names))
-                area_id_lookup_query = f"SELECT area_id FROM Area WHERE area IN ({area_name_placeholders})"
+                area_id_lookup_query = f"SELECT area_id FROM Area WHERE area IN ({area_name_placeholders})"  # query to get area IDs
 
                 cursor = conn.cursor()
                 cursor.execute(area_id_lookup_query, list(area_names))
-                fetched_area_ids = {row[0] for row in cursor.fetchall()}
+                fetched_area_ids = {row[0] for row in cursor.fetchall()}  # we store fetched area IDs in a set
                 cursor.close()
 
                 if not fetched_area_ids:
-                    return pd.DataFrame(columns=['category']) # Return with just 'category' column
+                    return pd.DataFrame(columns=['category']) # if no valid area IDs are found, return with just 'category' column
 
-                # Now, construct the main query using the fetched area_ids.
-                # We select DISTINCT category names from journals linked to these areas.
+                # Construct the main query using the fetched area_ids
+                # We select DISTINCT category names from journals linked to these areas
                 main_query_placeholders = ','.join(['?'] * len(fetched_area_ids))
                 query = f"""
                     SELECT DISTINCT C.category AS category
@@ -595,7 +587,7 @@ class CategoryQueryHandler(QueryHandler):
             # Execute the determined query
             df = pd.read_sql_query(query, conn, params=params)
 
-            # The result is already a DataFrame with distinct categories
+            # The result is a DataFrame with distinct categories
             return df
 
         except sqlite3.Error as e:
@@ -629,8 +621,7 @@ class CategoryQueryHandler(QueryHandler):
 
 
             if not category_names:
-                # If no category names are provided, query for all distinct areas.
-                # Similar to the category method, this assumes you want areas actually linked to a journal.
+                # If no category names are provided, query for all distinct areas linked to any journal
                 query = """
                     SELECT DISTINCT A.area AS area
                     FROM HasArea HA
@@ -638,9 +629,9 @@ class CategoryQueryHandler(QueryHandler):
                 """
                 params = []
             else:
-                # First, retrieve the actual category_ids from the Category table using the provided category_names.
+                # Get the actual category_ids from the Category table using the provided category_names
                 category_name_placeholders = ','.join(['?'] * len(category_names))
-                category_id_lookup_query = f"SELECT category_id FROM Category WHERE category IN ({category_name_placeholders})"
+                category_id_lookup_query = f"SELECT category_id FROM Category WHERE category IN ({category_name_placeholders})"  # query to get category IDs
 
                 cursor = conn.cursor()
                 cursor.execute(category_id_lookup_query, list(category_names))
@@ -648,10 +639,10 @@ class CategoryQueryHandler(QueryHandler):
                 cursor.close()
 
                 if not fetched_category_ids:
-                    return pd.DataFrame(columns=['area']) # Return with just 'area' column
+                    return pd.DataFrame(columns=['area']) # Return with just 'area' column if no valid category IDs are found
 
-                # Now, construct the main query using the fetched category_ids.
-                # We select DISTINCT area names from journals linked to these categories.
+                # Construct the main query using the fetched category_ids
+                # Select DISTINCT area names from journals linked to these categories
                 main_query_placeholders = ','.join(['?'] * len(fetched_category_ids))
                 query = f"""
                     SELECT DISTINCT A.area AS area
@@ -665,7 +656,7 @@ class CategoryQueryHandler(QueryHandler):
             # Execute the determined query
             df = pd.read_sql_query(query, conn, params=params)
 
-            # The result is already a DataFrame with distinct areas
+            # The result is a DataFrame with distinct areas
             return df
 
         except sqlite3.Error as e:
@@ -699,7 +690,7 @@ class CategoryQueryHandler(QueryHandler):
                     SELECT DISTINCT GROUP_CONCAT(JI.identifier, '; ') AS identifier
                     FROM JournalIdentifier JI
                     GROUP BY JI.journal_id
-                """
+                """  # query to concatenate all identifiers for each journal
                 df = pd.read_sql_query(query, conn)
 
             else:
@@ -868,7 +859,7 @@ class JournalUploadHandler(UploadHandler):
 
 from sparql_dataframe import get
 
-# Definition of JournalQueryHandler class, subclass of QueryHandler.
+# Definition of the JournalQueryHandler class
 
 
 class JournalQueryHandler(QueryHandler):
@@ -907,7 +898,7 @@ class JournalQueryHandler(QueryHandler):
         if not id:
             return pd.DataFrame() # if there's no value specified as id, or if it's empty, returns an empty DataFrame
 
-        filter_id = f''' 
+        filter_id = f '''
             FILTER(
                 STR(?identifier) = "{id}" ||          # Single ID
                 STRSTARTS(STR(?identifier), "{id}; ") ||  # First of two IDs
