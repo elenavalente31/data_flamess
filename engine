@@ -1,0 +1,224 @@
+from impl import *
+
+import pandas as pd
+
+
+class BasicQueryEngine:
+    """
+    BasicQueryEngine provides methods to query and manipulate journal and category data.
+
+    Attributes:
+        journalQuery (list): List of journal query handlers.
+        categoryQuery (list): List of category query handlers.
+    """
+
+    def __init__(self):
+        self.journalQuery = []
+        self.categoryQuery = []
+
+    def cleanJournalHandlers(self):
+        """Resets the journal query handlers list."""
+        self.journalQuery = []
+        return True
+
+    def cleanCategoryHandlers(self):
+        """Resets the category query handlers list."""
+        self.categoryQuery = []
+        return True
+
+    def addJournalHandler(self, handler: JournalQueryHandler):
+        """Adds a journal query handler."""
+        if not isinstance(handler, JournalQueryHandler):
+            return False
+        self.journalQuery.append(handler)
+        return True
+
+    def addCategoryHandler(self, handler: CategoryQueryHandler):
+        """Adds a category query handler."""
+        if not isinstance(handler, CategoryQueryHandler):
+            return False
+        self.categoryQuery.append(handler)
+        return True
+
+    def getCategoryById(self, id):
+        """Returns categories linked to a specified ID."""
+        if not id:
+            return []
+
+        id_list = [item.strip() for item in id.split(';')]
+        all_dfs = []
+
+        for handler in self.categoryQuery:
+            for item in id_list:
+                if item:
+                    df = handler.getById(item)
+                    if not df.empty:
+                        all_dfs.append(df)
+
+        if not all_dfs:
+            return []
+
+        merged_df = pd.concat(all_dfs).reset_index(drop=True)
+        categories = []
+        seen = set()
+
+        for _, row in merged_df.iterrows():
+            cat_list = row.get('category', [])
+            quartile_list = row.get('quartile', [])
+
+            if not isinstance(cat_list, list) or not isinstance(quartile_list, list):
+                continue
+
+            for i, cat in enumerate(cat_list):
+                quartile = quartile_list[i] if i < len(quartile_list) else None
+                key = (cat, quartile)
+                if key not in seen:
+                    seen.add(key)
+                    categories.append(Category([item], category=cat, quartile=quartile))
+
+        return categories
+
+    def getAreaById(self, id):
+        """Returns areas linked to a specified ID."""
+        if not id:
+            return []
+
+        id_list = [item.strip() for item in id.split(';') if item.strip()]
+        unique_areas = set()
+
+        for handler in self.categoryQuery:
+            for item_id in id_list:
+                df = handler.getById(item_id)
+                if df is not None and not df.empty:
+                    areas_df = df.get('area', [])
+
+                    if isinstance(areas_df, pd.Series):
+                        for entry in areas_df:
+                            if isinstance(entry, list):
+                                for area_name in entry:
+                                    if area_name and pd.notna(area_name):
+                                        unique_areas.add(str(area_name).strip())
+                            elif pd.notna(entry):
+                                unique_areas.add(str(entry).strip())
+                    elif isinstance(areas_df, list):
+                        for area_name in areas_df:
+                            if area_name and pd.notna(area_name):
+                                unique_areas.add(str(area_name).strip())
+                    elif pd.notna(areas_df):
+                        unique_areas.add(str(areas_df).strip())
+
+        return [Area([area_name]) for area_name in unique_areas]
+
+    def getEntityById(self, id):
+        """
+        Returns entities (Journal, or Category & Area) by ID.
+
+        First, tries to find a Journal using journalQuery. If not found,
+        tries categoryQuery to return a Category and Area.
+        """
+        all_dfs = []
+
+        for handler in self.journalQuery:
+            df = handler.getById(id)
+            if df is not None and not df.empty:
+                all_dfs.append(df.fillna(""))
+
+        if all_dfs:
+            merged_df = pd.concat(all_dfs).reset_index(drop=True)
+
+            for col in merged_df.columns:
+                if merged_df[col].apply(lambda x: isinstance(x, list)).any():
+                    merged_df[col] = merged_df[col].apply(str)
+
+            merged_df = merged_df.drop_duplicates()
+            row = merged_df.iloc[0]
+
+            id_str = row.get('identifier', "")
+            lang_str = row.get('languages', "")
+
+            journal = Journal(
+                identifiers=[id.strip() for id in id_str.split(';')] if id_str else [],
+                title=row['title'],
+                languages=[lang.strip() for lang in lang_str.split(',')] if lang_str else [],
+                seal=row['seal'],
+                licence=row['license'],
+                apc=row['apc'],
+                publisher=row.get("publisher") if pd.notna(row.get("publisher")) else None,
+                categories=self.getCategoryById(id_str),
+                areas=self.getAreaById(id_str)
+            )
+
+            return journal
+
+        all_dfs = []
+        for handler in self.categoryQuery:
+            df = handler.getById(id)
+            if df is not None and not df.empty:
+                all_dfs.append(df.fillna(""))
+
+        if not all_dfs:
+            return None
+
+        merged_df = pd.concat(all_dfs).reset_index(drop=True)
+
+        for col in merged_df.columns:
+            if merged_df[col].apply(lambda x: isinstance(x, list)).any():
+                merged_df[col] = merged_df[col].apply(str)
+
+        merged_df = merged_df.drop_duplicates()
+
+        if merged_df.empty:
+            return None
+
+        row = merged_df.iloc[0]
+
+        category = Category(
+            identifiers=row["identifier"],
+            category=row["category"],
+            quartile=row["quartile"]
+        )
+
+        area = Area(
+            identifiers=row["area"]
+        )
+
+        return category, area
+
+    def getAllJournals(self):
+        """
+        Retrieves all journal entities from the registered journal handlers.
+
+        Returns:
+            list[Journal]: List of all unique Journal entities.
+        """
+        all_dfs = []
+        for handler in self.journalQuery:
+            df = handler.getAllJournals()
+            if not df.empty:
+                all_dfs.append(df.fillna(""))
+
+        if not all_dfs:
+            return []
+
+        merged_df = pd.concat(all_dfs).reset_index(drop=True).drop_duplicates()
+        allJournalsList = []
+
+        for _, row in merged_df.iterrows():
+            id_str = row.get('identifier', "")
+            lang_str = row.get('languages', "")
+
+            journal = Journal(
+                identifiers=[id.strip() for id in id_str.split(';')] if id_str else [],
+                title=row['title'],
+                languages=[lang.strip() for lang in lang_str.split(',')] if lang_str else [],
+                seal=row['seal'],
+                licence=row['license'],
+                apc=row['apc'],
+                publisher=row.get("publisher") if pd.notna(row.get("publisher")) else None,
+                categories=self.getCategoryById(id_str),
+                areas=self.getAreaById(id_str)
+            )
+
+            allJournalsList.append(journal)
+
+        return allJournalsList
