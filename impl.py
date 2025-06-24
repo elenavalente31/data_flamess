@@ -506,7 +506,7 @@ class CategoryQueryHandler(QueryHandler):
         try:
             conn = sqlite3.connect(db_path)
 
-            base_query = "SELECT category, quartile FROM Category"  # query to select categories and quartiles
+            base_query = "SELECT DISTINCT category, quartile FROM Category"  # query to select categories and quartiles
 
             if not quartiles:
                 df = pd.read_sql_query(base_query, conn)
@@ -515,10 +515,11 @@ class CategoryQueryHandler(QueryHandler):
                 query = f"{base_query} WHERE quartile IN ({placeholders})" # we add a WHERE to filter by specified quartiles
                 df = pd.read_sql_query(query, conn, params=list(quartiles))
 
+            df = df.drop_duplicates(subset=['category', 'quartile'])
             return df
         except sqlite3.Error as e:
             print(f"Database error in getCategoriesWithQuartile: {e}")
-            return pd.DataFrame()
+            return pd.DataFrame(columns=['category', 'quartile'])
         finally:
             if conn:
                 conn.close()
