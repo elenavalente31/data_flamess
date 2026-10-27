@@ -1,4 +1,4 @@
-# Group Project – Data Science 2024/25
+# The Project
 
 This group project was developed for the [Data Science](https://www.unibo.it/it/studiare/insegnamenti-competenze-trasversali-moocs/insegnamenti/insegnamento/2024/467046) 2024/25 course, taught by [Silvio Peroni](https://www.unibo.it/sitoweb/silvio.peroni), for the Master's Degree in [Digital Humanities and Digital Knowledge (DHDK)](https://corsi.unibo.it/2cycle/DigitalHumanitiesKnowledge) at the University of Bologna.
 
