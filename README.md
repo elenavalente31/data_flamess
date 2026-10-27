@@ -1,6 +1,6 @@
 # Group Project – Data Science 2024/25
 
-This group project was developed for the [Data Science](https://www.unibo.it/it/studiare/insegnamenti-competenze-trasversali-moocs/insegnamenti/insegnamento/2024/467046) 2024/25 course, taught by [Professor Silvio Peroni](https://www.unibo.it/sitoweb/silvio.peroni), for the [Master&#39;s Degree in Digital Humanities and Digital Knowledge (DHDK)](https://corsi.unibo.it/2cycle/DigitalHumanitiesKnowledge) at the University of Bologna.
+This group project was developed for the [Data Science](https://www.unibo.it/it/studiare/insegnamenti-competenze-trasversali-moocs/insegnamenti/insegnamento/2024/467046) 2024/25 course, taught by [Silvio Peroni](https://www.unibo.it/sitoweb/silvio.peroni), for the Master's Degree in [Digital Humanities and Digital Knowledge (DHDK)](https://corsi.unibo.it/2cycle/DigitalHumanitiesKnowledge) at the University of Bologna.
 
 The project is a Python application that provides a unified and simultaneous interface to data stored in two different storage systems: a Blazegraph `SPARQL` graph database containing metadata about the journals contained in the [Directory of Open Access Journals (`DOAJ`)](https://doaj.org/), and a `SQLite` relational database containing information of scholarly journals in terms of their categories and areas of interest as extracted from [Scimago Journal Rank (`SJR`)](https://www.scimagojr.com/).
 
